@@ -1,0 +1,25 @@
+1. Abrir la carpeta raíz en VS Code.
+2. Crear entorno virtual:
+   python -m venv .venv
+
+3. Instalar dependencias:
+   .\.venv\Scripts\python.exe -m pip install --upgrade pip
+   .\.venv\Scripts\python.exe -m pip install -r .\backend\requirements.txt
+
+4. Copiar estas DLL dentro de .venv\Scripts:
+   rtlsdr.dll
+   librtlsdr.dll
+   libusb-1.0.dll
+
+5. Instalar driver WinUSB con Zadig sobre Bulk-In Interface 0.
+
+6. Ejecutar backend:
+   $env:PATH = "$PWD\.venv\Scripts;$env:PATH"
+   .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+7. Ejecutar frontend en otra terminal:
+   cd frontend
+   python -m http.server 5173
+
+8. Abrir:
+   http://127.0.0.1:5173

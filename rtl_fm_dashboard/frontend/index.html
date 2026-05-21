@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RTL-SDR FM Dashboard</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">RTL-SDR · FM · PSD Welch · Localhost</p>
+        <h1>Dashboard SDR interactivo</h1>
+        <p class="subtitle">
+          Backend Python controla la radio, DSP y audio. El frontend solo visualiza PSD, métricas y controles.
+        </p>
+      </div>
+
+      <div class="status-pill" id="connection-pill">
+        <span class="dot"></span>
+        <span id="connection-text">Conectando...</span>
+      </div>
+    </section>
+
+    <section class="layout">
+      <aside class="panel controls">
+        <h2>Control de radio</h2>
+
+        <label>
+          Frecuencia central [MHz]
+          <input id="freq-mhz" type="text" inputmode="decimal" value="105.7" autocomplete="off" />
+        </label>
+
+        <label>
+          Ganancia RTL [dB]
+          <input id="gain" type="text" inputmode="decimal" value="35" autocomplete="off" />
+        </label>
+
+        <label>
+          Sample rate RF [S/s]
+          <input id="sample-rate" type="number" min="225000" max="2400000" step="1000" value="250000" autocomplete="off" />
+        </label>
+
+        <label>
+          Corte RF LPF [kHz]
+          <input id="rf-cutoff-khz" type="text" inputmode="decimal" value="100" autocomplete="off" />
+        </label>
+
+        <label>
+          Volumen
+          <input id="volume" type="range" min="0" max="2" step="0.01" value="0.7" />
+          <span id="volume-value">0.70</span>
+        </label>
+
+        <div id="validation-box" class="validation-box ok">
+          Parámetros dentro de rango.
+        </div>
+
+        <div class="button-row">
+          <button id="start-btn" class="primary">Iniciar</button>
+          <button id="stop-btn" class="danger">Detener</button>
+        </div>
+
+        <button id="apply-btn" class="secondary">Aplicar configuración</button>
+
+        <p class="hint">
+          Al cambiar frecuencia/ganancia con el SDR en ejecución, el backend reinicia el servicio de forma controlada.
+        </p>
+      </aside>
+
+      <section class="main-column">
+        <section class="metrics-grid">
+          <article class="metric-card">
+            <span>Estado</span>
+            <strong id="running">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>Pico</span>
+            <strong id="peak">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>Offset</span>
+            <strong id="offset">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>BW -20 dB</span>
+            <strong id="bw20">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>Audio RMS</span>
+            <strong id="audio-rms">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>Underflows</span>
+            <strong id="underflows">—</strong>
+          </article>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="chart-header">
+            <div>
+              <h2>PSD Welch</h2>
+              <p id="chart-subtitle">Esperando muestras...</p>
+            </div>
+            <div class="small-status" id="queue-status">IQ: — · Audio: —</div>
+          </div>
+
+          <canvas id="psd-canvas" width="1200" height="520"></canvas>
+        </section>
+
+        <section class="panel log-panel">
+          <h2>Diagnóstico</h2>
+          <pre id="log">Sin errores reportados.</pre>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
