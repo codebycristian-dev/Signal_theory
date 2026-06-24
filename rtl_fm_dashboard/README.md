@@ -85,3 +85,41 @@ IQ block → Welch PSD → métricas → WebSocket → dashboard
 - Si cambias frecuencia, ganancia o sample rate con el receptor activo, el backend reinicia el servicio de forma controlada.
 - La PSD se envía por WebSocket cada 0.2 s aproximadamente.
 - El audio sale por el dispositivo de audio del computador donde corre el backend.
+
+## 6. Localizacion espectral por consola
+
+El script `backend/spectral_scan.py` captura IQ desde la RTL-SDR/Noelec Smart y estima:
+
+- localizacion espectral de cada senal detectada
+- frecuencia central por centroide de potencia
+- ancho de banda CFAR y ancho ocupado 99%
+- potencia instantanea y promedio relativo en dBFS
+- SNR aproximado contra el piso local
+
+El algoritmo usa Welch + CFAR + waterfall + agrupamiento de bins contiguos:
+
+```powershell
+python -m backend.spectral_scan --center-freq 105.7M --sample-rate 250k --gain 35 --duration 10
+```
+
+Salida en JSONL:
+
+```powershell
+python -m backend.spectral_scan --center-freq 105.7M --sample-rate 250k --jsonl mediciones.jsonl
+```
+
+Guardar waterfall final:
+
+```powershell
+python -m backend.spectral_scan --center-freq 105.7M --sample-rate 250k --waterfall-npz waterfall.npz
+```
+
+Opciones utiles:
+
+- `--cfar-threshold-db`: sensibilidad de deteccion sobre el piso local.
+- `--cfar-train` y `--cfar-guard`: celdas de entrenamiento y guarda.
+- `--min-bins`: ancho minimo en bins para aceptar una senal.
+- `--min-persistence`: votos minimos en el waterfall para filtrar detecciones transitorias.
+- `--dc-notch-hz`: ignora detecciones alrededor de la frecuencia sintonizada si aparece espurio DC.
+
+Las potencias son relativas al flujo IQ digital (`dBFS_relative`), no dBm calibrado.

@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   ws: null,
   lastPsd: null,
+  lastStatus: null,
   connected: false,
 };
 
@@ -210,11 +211,82 @@ function setConnection(connected, text) {
 }
 
 function formatNumber(value, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  return Number(value).toFixed(digits);
+  const numberValue = Number(value);
+  if (value === null || value === undefined || !Number.isFinite(numberValue)) return "—";
+  return numberValue.toFixed(digits);
+}
+
+function finiteNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function formatHz(value, digits = 1) {
+  const numberValue = finiteNumber(value);
+  if (numberValue === null) return "--";
+
+  const absValue = Math.abs(numberValue);
+
+  if (absValue >= 1e6) return `${formatNumber(numberValue / 1e6, 3)} MHz`;
+  if (absValue >= 1e3) return `${formatNumber(numberValue / 1e3, digits)} kHz`;
+  return `${formatNumber(numberValue, 0)} Hz`;
+}
+
+function formatDb(value, digits = 1, unit = "dBFS") {
+  const numberValue = finiteNumber(value);
+  return numberValue === null ? "--" : `${formatNumber(numberValue, digits)} ${unit}`;
+}
+
+function formatSnr(value) {
+  const numberValue = finiteNumber(value);
+  return numberValue === null ? "--" : `${formatNumber(numberValue, 1)} dB`;
+}
+
+function signalFreqMhz(signal, key) {
+  const value = finiteNumber(signal?.[key]);
+  return value === null ? null : value / 1e6;
+}
+
+function estimateSpectralOccupancy(psd) {
+  const signals = Array.isArray(psd?.signals) ? psd.signals : [];
+  const analysis = psd?.analysis || {};
+  const freqs = psd?.freq_mhz || [];
+  let occupiedHz = 0;
+
+  signals.forEach((signal) => {
+    const bw = finiteNumber(signal.occupied_bw_99_hz) ?? finiteNumber(signal.bandwidth_hz);
+    if (bw !== null && bw > 0) occupiedHz += bw;
+  });
+
+  const spanFromMetadata = finiteNumber(analysis.sample_rate);
+  const spanFromStatus = finiteNumber(state.lastStatus?.config?.sample_rate);
+  const spanFromPsd =
+    freqs.length >= 2 ? (Math.max(...freqs) - Math.min(...freqs)) * 1e6 : null;
+  const spanHz = spanFromMetadata ?? spanFromStatus ?? spanFromPsd;
+  const percent = spanHz && spanHz > 0 ? Math.min(100, (occupiedHz / spanHz) * 100) : null;
+
+  return { occupiedHz, percent, spanHz };
+}
+
+function formatAnalysisMeta(psd, occupancy) {
+  const analysis = psd?.analysis || {};
+  const parts = [];
+
+  if (finiteNumber(analysis.sample_rate) !== null) parts.push(`Fs ${formatHz(analysis.sample_rate)}`);
+  if (finiteNumber(analysis.df_hz) !== null) parts.push(`df ${formatHz(analysis.df_hz)}`);
+  if (finiteNumber(analysis.cfar_threshold_db) !== null) {
+    parts.push(`CFAR +${formatNumber(analysis.cfar_threshold_db, 1)} dB`);
+  }
+  if (finiteNumber(analysis.waterfall_rows) !== null) {
+    parts.push(`waterfall ${analysis.waterfall_rows} filas`);
+  }
+  if (occupancy.occupiedHz > 0) parts.push(`ocupado ${formatHz(occupancy.occupiedHz)}`);
+
+  return parts.length > 0 ? parts.join(" | ") : "Metadata del analizador no disponible.";
 }
 
 function updateUiFromStatus(status) {
+  state.lastStatus = status;
   $("running").textContent = status.running ? "Ejecutando" : "Detenido";
 
   $("audio-rms").textContent = formatNumber(status.levels?.audio_rms, 4);
@@ -233,12 +305,72 @@ function updateUiFromStatus(status) {
 }
 
 function updateUiFromPsd(psd) {
-  if (!psd || !psd.metrics) return;
+  if (!psd) return;
 
-  const m = psd.metrics;
-  $("peak").textContent = m.peak_mhz ? `${formatNumber(m.peak_mhz, 4)} MHz` : "—";
-  $("offset").textContent = m.offset_khz !== null ? `${formatNumber(m.offset_khz, 1)} kHz` : "—";
-  $("bw20").textContent = m.bw20_khz !== null ? `${formatNumber(m.bw20_khz, 1)} kHz` : "—";
+  const m = psd.metrics || {};
+  const signals = Array.isArray(psd.signals) ? psd.signals : [];
+  const power = psd.power || {};
+  const occupancy = estimateSpectralOccupancy(psd);
+
+  $("peak").textContent = finiteNumber(m.peak_mhz) !== null ? `${formatNumber(m.peak_mhz, 4)} MHz` : "—";
+  $("offset").textContent = finiteNumber(m.offset_khz) !== null ? `${formatNumber(m.offset_khz, 1)} kHz` : "—";
+  $("bw20").textContent = finiteNumber(m.bw20_khz) !== null ? `${formatNumber(m.bw20_khz, 1)} kHz` : "—";
+  $("signal-count").textContent = String(signals.length);
+  $("avg-power").textContent = formatDb(power.avg_total_power_dbfs);
+  $("spectral-occupancy").textContent =
+    occupancy.percent === null ? "--" : `${formatNumber(occupancy.percent, 1)}%`;
+  $("spectral-occupancy").title =
+    occupancy.occupiedHz > 0 ? `${formatHz(occupancy.occupiedHz)} de ${formatHz(occupancy.spanHz)}` : "";
+  $("power-status").textContent =
+    `Potencia: ${formatDb(power.instant_total_power_dbfs)} inst. / ${formatDb(power.avg_total_power_dbfs)} prom.`;
+  $("analysis-meta").textContent = formatAnalysisMeta(psd, occupancy);
+
+  renderSignalsTable(signals);
+}
+
+function renderSignalsTable(signals) {
+  const tbody = $("signals-table-body");
+  tbody.innerHTML = "";
+
+  if (!Array.isArray(signals) || signals.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.className = "empty-cell";
+    cell.textContent = "Sin senales detectadas.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+
+  signals.forEach((signal, index) => {
+    const row = document.createElement("tr");
+    const values = [
+      String(signal.id ?? index + 1),
+      formatHz(signal.center_freq_hz, 3),
+      formatHz(signal.bandwidth_hz ?? signal.occupied_bw_99_hz, 1),
+      formatDb(signal.instant_power_dbfs),
+      formatDb(signal.avg_power_dbfs),
+      formatSnr(signal.snr_db),
+    ];
+
+    values.forEach((value, cellIndex) => {
+      const cell = document.createElement("td");
+
+      if (cellIndex === 0) {
+        const badge = document.createElement("span");
+        badge.className = "signal-id";
+        badge.textContent = value;
+        cell.appendChild(badge);
+      } else {
+        cell.textContent = value;
+      }
+
+      row.appendChild(cell);
+    });
+
+    tbody.appendChild(row);
+  });
 }
 
 function connectWs() {
@@ -285,6 +417,7 @@ function drawPsd(psd) {
 
   const freqs = psd.freq_mhz || [];
   const vals = psd.psd_db || [];
+  const signals = Array.isArray(psd.signals) ? psd.signals : [];
 
   ctx.clearRect(0, 0, width, height);
 
@@ -356,6 +489,8 @@ function drawPsd(psd) {
   ctx.strokeStyle = "rgba(255,255,255,0.22)";
   ctx.strokeRect(padL, padT, plotW, plotH);
 
+  drawSignalBands(ctx, signals, xMin, xMax, xMap, padT, plotH);
+
   // Curva PSD con gradiente
   const grad = ctx.createLinearGradient(padL, padT, padL + plotW, padT);
   grad.addColorStop(0, "#66e3ff");
@@ -375,11 +510,90 @@ function drawPsd(psd) {
 
   ctx.stroke();
 
+  drawSignalMarkers(ctx, signals, xMin, xMax, xMap, yMap, padT, plotH);
+
   // Etiquetas
   ctx.fillStyle = "rgba(234,241,255,0.95)";
   ctx.font = "14px system-ui";
   ctx.fillText("PSD [dB/Hz]", 12, 22);
   ctx.fillText("Frecuencia [MHz]", width / 2 - 55, height - 8);
+}
+
+function drawSignalBands(ctx, signals, xMin, xMax, xMap, padT, plotH) {
+  signals.slice(0, 16).forEach((signal, index) => {
+    const center = signalFreqMhz(signal, "center_freq_hz") ?? signalFreqMhz(signal, "peak_freq_hz");
+    let start = signalFreqMhz(signal, "start_freq_hz");
+    let stop = signalFreqMhz(signal, "stop_freq_hz");
+    const bandwidthHz = finiteNumber(signal.bandwidth_hz);
+
+    if ((start === null || stop === null) && center !== null && bandwidthHz !== null) {
+      start = center - bandwidthHz / 2e6;
+      stop = center + bandwidthHz / 2e6;
+    }
+
+    if (start === null || stop === null || stop < xMin || start > xMax) return;
+
+    const left = Math.max(xMin, Math.min(start, stop));
+    const right = Math.min(xMax, Math.max(start, stop));
+    const xLeft = xMap(left);
+    const width = Math.max(2, xMap(right) - xLeft);
+    const hueAlpha = index % 2 === 0 ? 0.13 : 0.09;
+
+    ctx.fillStyle = `rgba(255, 209, 102, ${hueAlpha})`;
+    ctx.fillRect(xLeft, padT, width, plotH);
+
+    if (center !== null && center >= xMin && center <= xMax) {
+      const xCenter = xMap(center);
+      ctx.strokeStyle = "rgba(255, 209, 102, 0.58)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(xCenter, padT);
+      ctx.lineTo(xCenter, padT + plotH);
+      ctx.stroke();
+    }
+  });
+}
+
+function drawSignalMarkers(ctx, signals, xMin, xMax, xMap, yMap, padT, plotH) {
+  const markerSignals = signals.slice(0, 8);
+
+  markerSignals.forEach((signal, index) => {
+    const center = signalFreqMhz(signal, "center_freq_hz") ?? signalFreqMhz(signal, "peak_freq_hz");
+    if (center === null || center < xMin || center > xMax) return;
+
+    ctx.font = "12px system-ui";
+    const x = xMap(center);
+    const peakPsd = finiteNumber(signal.peak_psd_dbfs_per_hz);
+    const rawY = peakPsd === null ? padT + 24 : yMap(peakPsd);
+    const y = Math.max(padT + 20, Math.min(padT + plotH - 18, rawY));
+    const label = `S${signal.id ?? index + 1} ${formatNumber(center, 4)} MHz`;
+    const labelWidth = ctx.measureText(label).width + 12;
+    const labelX = Math.max(74, Math.min(ctx.canvas.width - labelWidth - 18, x + 8));
+    const labelY = padT + 22 + (index % 4) * 20;
+
+    ctx.strokeStyle = "rgba(255, 209, 102, 0.86)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, labelY + 4);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffd166";
+    ctx.beginPath();
+    ctx.moveTo(x, y - 8);
+    ctx.lineTo(x - 5, y + 3);
+    ctx.lineTo(x + 5, y + 3);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(4, 8, 20, 0.82)";
+    ctx.fillRect(labelX, labelY - 13, labelWidth, 18);
+    ctx.strokeStyle = "rgba(255, 209, 102, 0.50)";
+    ctx.strokeRect(labelX, labelY - 13, labelWidth, 18);
+    ctx.fillStyle = "#ffe2a4";
+    ctx.font = "12px system-ui";
+    ctx.fillText(label, labelX + 6, labelY);
+  });
 }
 
 async function refreshStatus() {

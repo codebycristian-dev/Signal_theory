@@ -202,7 +202,7 @@ button:active {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 14px;
 }
 
@@ -226,17 +226,33 @@ button:active {
   text-overflow: ellipsis;
 }
 
+.metric-card-highlight {
+  border-color: rgba(255, 209, 102, 0.28);
+}
+
+.metric-card-highlight span {
+  color: #ffe2a4;
+}
+
 .chart-panel,
+.signals-panel,
 .log-panel {
   padding: 20px;
 }
 
 .chart-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 12px;
+}
+
+.chart-header .small-status {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .chart-header p {
@@ -251,6 +267,68 @@ button:active {
   border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(0, 0, 0, 0.28);
+}
+
+.signals-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(4, 8, 20, 0.44);
+}
+
+.signals-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.signals-table th,
+.signals-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.signals-table th {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.signals-table td {
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.signals-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.signals-table tbody tr {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.signals-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.signal-id {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: #08111f;
+  background: #ffd166;
+  font-weight: 900;
+}
+
+.empty-cell {
+  color: var(--muted) !important;
+  text-align: center !important;
 }
 
 pre {

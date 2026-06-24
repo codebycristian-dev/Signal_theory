@@ -96,6 +96,18 @@
             <span>Underflows</span>
             <strong id="underflows">—</strong>
           </article>
+          <article class="metric-card metric-card-highlight">
+            <span>Potencia prom.</span>
+            <strong id="avg-power">--</strong>
+          </article>
+          <article class="metric-card metric-card-highlight">
+            <span>Ocupacion</span>
+            <strong id="spectral-occupancy">--</strong>
+          </article>
+          <article class="metric-card metric-card-highlight">
+            <span>Senales</span>
+            <strong id="signal-count">--</strong>
+          </article>
         </section>
 
         <section class="panel chart-panel">
@@ -108,6 +120,36 @@
           </div>
 
           <canvas id="psd-canvas" width="1200" height="520"></canvas>
+        </section>
+
+        <section class="panel signals-panel">
+          <div class="chart-header">
+            <div>
+              <h2>Senales detectadas</h2>
+              <p id="analysis-meta">Esperando metadata del analizador...</p>
+            </div>
+            <div class="small-status" id="power-status">Potencia: --</div>
+          </div>
+
+          <div class="signals-table-wrap">
+            <table class="signals-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Frecuencia central</th>
+                  <th>Ancho de banda</th>
+                  <th>Potencia inst.</th>
+                  <th>Potencia prom.</th>
+                  <th>SNR</th>
+                </tr>
+              </thead>
+              <tbody id="signals-table-body">
+                <tr>
+                  <td colspan="6" class="empty-cell">Sin senales detectadas.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="panel log-panel">

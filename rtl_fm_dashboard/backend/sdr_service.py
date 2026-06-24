@@ -10,7 +10,8 @@ from scipy import signal
 
 from .audio import AudioPlayer
 from .config import SDRConfig
-from .dsp import de_emphasis_filter, fm_demod, welch_psd
+from .dsp import de_emphasis_filter, fm_demod
+from .spectral_analysis import SpectralAnalyzer, SpectralAnalyzerConfig
 
 
 class RTLReader(threading.Thread):
@@ -79,6 +80,21 @@ class DSPWorker(threading.Thread):
         self.prev_sample = np.complex64(1 + 0j)
         self.last_psd_time = 0.0
         self.audio_fifo = np.zeros(0, dtype=np.float32)
+        self.spectral_analyzer = SpectralAnalyzer(
+            SpectralAnalyzerConfig(
+                sample_rate=self.cfg.sample_rate,
+                center_freq=self.cfg.center_freq,
+                nperseg=self.cfg.psd_nperseg,
+                waterfall_rows=64,
+                cfar_train_cells=24,
+                cfar_guard_cells=3,
+                cfar_threshold_db=8.0,
+                min_signal_bins=3,
+                merge_gap_bins=2,
+                persistence_window=5,
+                min_persistence=1,
+            )
+        )
 
         self.resamp_up, self.resamp_down = self.cfg.resample_ratio()
 
@@ -115,11 +131,8 @@ class DSPWorker(threading.Thread):
 
                 if now - self.last_psd_time >= (1.0 / self.cfg.psd_update_hz):
                     self.last_psd_time = now
-                    psd_payload = welch_psd(
+                    psd_payload = self.spectral_analyzer.process(
                         iq=iq,
-                        fs=self.cfg.sample_rate,
-                        center_freq=self.cfg.center_freq,
-                        nperseg=self.cfg.psd_nperseg,
                         max_points=self.cfg.psd_max_points,
                     )
                     self.psd_callback(psd_payload)
